@@ -1,0 +1,150 @@
+--[[ 
+    MANGO EMPIRE: THE RELOADED ENGINE (Auto-Fix Version)
+--]]
+
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+-- 1. AUTO-SETUP: Creates the RemoteEvent if you forgot it
+local AnnouncementRemote = ReplicatedStorage:FindFirstChild("AnnouncementRemote")
+if not AnnouncementRemote then
+	AnnouncementRemote = Instance.new("RemoteEvent")
+	AnnouncementRemote.Name = "AnnouncementRemote"
+	AnnouncementRemote.Parent = ReplicatedStorage
+end
+
+local coinStore = DataStoreService:GetDataStore("MangoSave_v3")
+
+-- 2. PLAYER JOINED LOGIC
+Players.PlayerAdded:Connect(function(player)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	stats.Parent = player
+
+	local coins = Instance.new("IntValue")
+	coins.Name = "MangoCoins"
+	coins.Parent = stats
+	
+	-- Create a Pet Folder for later
+	local pets = Instance.new("Folder")
+	pets.Name = "Pets"
+	pets.Parent = player
+
+	-- Load Data
+	local success, savedData = pcall(function()
+		return coinStore:GetAsync(tostring(player.UserId))
+	end)
+	if success and savedData then
+		coins.Value = savedData
+	end
+end)
+
+-- 3. ACCESSORY FUNCTIONS (The Visuals)
+local function applyLucceMaster(parent)
+	local crown = Instance.new("Part")
+	crown.Name = "SpecialModel"
+	crown.Size = Vector3.new(1, 0.5, 1)
+	crown.Color = Color3.fromRGB(255, 215, 0)
+	crown.Material = Enum.Material.Neon
+	crown.CanCollide = false
+	crown.CFrame = parent.CFrame * CFrame.new(0, 1, 0)
+	crown.Parent = parent
+	
+	local w = Instance.new("WeldConstraint", crown)
+	w.Part0 = crown; w.Part1 = parent
+
+	local p = Instance.new("ParticleEmitter", crown)
+	p.Color = ColorSequence.new(Color3.fromRGB(255, 255, 0))
+	p.Rate = 20
+end
+
+local function applyHaimwille(parent)
+	local comp = Instance.new("Part")
+	comp.Name = "SpecialModel"
+	comp.Size = Vector3.new(0.8, 0.8, 0.2)
+	comp.Color = Color3.fromRGB(0, 255, 255)
+	comp.Material = Enum.Material.Neon
+	comp.CanCollide = false
+	comp.CFrame = parent.CFrame * CFrame.new(0, 0.5, 0.6)
+	comp.Parent = parent
+	
+	local w = Instance.new("WeldConstraint", comp)
+	w.Part0 = comp; w.Part1 = parent
+
+	local p = Instance.new("ParticleEmitter", comp)
+	p.Color = ColorSequence.new(Color3.fromRGB(0, 255, 255))
+	p.Rate = 30
+end
+
+-- 4. MANGO LOGIC
+local function setupMango(mango)
+	local debounce = false
+	local currentMult = 1
+
+	local function mutate()
+		-- Clean old parts
+		for _, v in pairs(mango:GetChildren()) do
+			if v.Name == "SpecialModel" or v:IsA("WeldConstraint") then v:Destroy() end
+		end
+		
+		local r = math.random(1, 1000)
+		if r == 1 then
+			mango.Color = Color3.fromRGB(255, 215, 0) -- LucceMaster
+			currentMult = 1000
+			applyLucceMaster(mango)
+		elseif r == 2 then
+			mango.Color = Color3.fromRGB(0, 255, 255) -- Haimwille
+			currentMult = 1000
+			applyHaimwille(mango)
+		elseif r <= 100 then
+			mango.Color = Color3.fromRGB(170, 0, 255) -- Mutant
+			currentMult = 20
+		else
+			mango.Color = Color3.fromRGB(255, 170, 0) -- Common
+			currentMult = 1
+		end
+	end
+
+	mutate()
+
+	mango.Touched:Connect(function(hit)
+		local char = hit.Parent
+		local player = Players:GetPlayerFromCharacter(char)
+		
+		if player and not debounce then
+			debounce = true
+			
+			if currentMult >= 1000 then
+				AnnouncementRemote:FireAllClients("🌟 RARE FIND BY " .. player.Name:upper() .. "!")
+			end
+
+			player.leaderstats.MangoCoins.Value += currentMult
+			
+			mango.Transparency = 1
+			mango.CanTouch = false
+			for _, v in pairs(mango:GetChildren()) do if v:IsA("BasePart") then v.Transparency = 1 end end
+			
+			task.wait(3)
+			
+			mutate()
+			mango.Transparency = 0
+			mango.CanTouch = true
+			debounce = false
+		end
+	end)
+end
+
+-- 5. INITIALIZE
+for _, item in pairs(workspace:GetChildren()) do
+	if item.Name == "Mango" and item:IsA("BasePart") then
+		setupMango(item)
+	end
+end
+
+-- 6. SAVE ON LEAVE
+Players.PlayerRemoving:Connect(function(player)
+	pcall(function()
+		coinStore:SetAsync(tostring(player.UserId), player.leaderstats.MangoCoins.Value)
+	end)
+end)
